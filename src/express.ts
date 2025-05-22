@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import express from "express";
+import server from "./index";
 
 export function createSSEServer(mcpServer: McpServer) {
   const app = express();
@@ -33,3 +34,7 @@ export function createSSEServer(mcpServer: McpServer) {
 
   return app;
 }
+
+const sseServer = createSSEServer(server);
+
+sseServer.listen(3000);
