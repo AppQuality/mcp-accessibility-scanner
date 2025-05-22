@@ -1,72 +1,35 @@
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import express, { Request, Response } from "express";
-import server from "./index";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import express from "express";
 
-const app = express();
-app.use(express.json());
+export function createSSEServer(mcpServer: McpServer) {
+  const app = express();
 
-app.post("/mcp", async (req: Request, res: Response) => {
-  // In stateless mode, create a new instance of transport and server for each request
-  // to ensure complete isolation. A single instance would cause request ID collisions
-  // when multiple clients connect concurrently.
+  const transportMap = new Map<string, SSEServerTransport>();
 
-  try {
-    const transport: StreamableHTTPServerTransport =
-      new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-      });
-    res.on("close", () => {
-      console.log("Request closed");
-      transport.close();
-      server.close();
-    });
-    await server.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  } catch (error) {
-    console.error("Error handling MCP request:", error);
-    if (!res.headersSent) {
-      res.status(500).json({
-        jsonrpc: "2.0",
-        error: {
-          code: -32603,
-          message: "Internal server error",
-        },
-        id: null,
-      });
+  app.get("/sse", async (req, res) => {
+    console.log("SSE connection established");
+    const transport = new SSEServerTransport("/messages", res);
+    transportMap.set(transport.sessionId, transport);
+    await mcpServer.connect(transport);
+  });
+
+  app.post("/messages", (req, res) => {
+    console.log("Message received");
+    const sessionId = req.query.sessionId as string;
+    if (!sessionId) {
+      console.error("Message received without sessionId");
+      res.status(400).json({ error: "sessionId is required" });
+      return;
     }
-  }
-});
 
-app.get("/mcp", async (req: Request, res: Response) => {
-  console.log("Received GET MCP request");
-  res.writeHead(405).end(
-    JSON.stringify({
-      jsonrpc: "2.0",
-      error: {
-        code: -32000,
-        message: "Method not allowed.",
-      },
-      id: null,
-    })
-  );
-});
+    const transport = transportMap.get(sessionId);
 
-app.delete("/mcp", async (req: Request, res: Response) => {
-  console.log("Received DELETE MCP request");
-  res.writeHead(405).end(
-    JSON.stringify({
-      jsonrpc: "2.0",
-      error: {
-        code: -32000,
-        message: "Method not allowed.",
-      },
-      id: null,
-    })
-  );
-});
+    if (transport) {
+      console.log("Handling post message");
+      transport.handlePostMessage(req, res);
+    }
+  });
 
-// Start the server
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`MCP Stateless Streamable HTTP Server listening on port ${PORT}`);
-});
+  return app;
+}
