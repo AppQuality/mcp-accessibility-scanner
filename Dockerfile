@@ -47,6 +47,8 @@ RUN apt-get update && apt-get install -y \
     libxtst6 \
     libxshmfence1 \
     libdrm2
+    
+RUN npx playwright install --with-deps chromium
 
 # Copy package.json and package-lock.json (if available)
 COPY package*.json ./
@@ -55,7 +57,6 @@ COPY package*.json ./
 RUN npm install
 
 # Install Playwright browsers
-RUN npx playwright install --with-deps chromium
 
 # Copy the rest of the application
 COPY . .
@@ -67,4 +68,4 @@ RUN npm run build
 EXPOSE 3000
 
 # Command to run the application
-CMD ["node", "build/server.js"]
+CMD ["node", "build/express.js"]
